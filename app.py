@@ -1,53 +1,79 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 import plotly.express as px
-import shap
+from sklearn.ensemble import RandomForestClassifier
 
 st.set_page_config(layout="wide")
 
-st.title("🏦 TradePulse AI - Enterprise Attrition Intelligence")
-st.caption("Real-Time Monitoring | Explainable AI | Decision Engine")
+st.title("🏦 TradePulse AI – Enterprise Attrition Intelligence Platform")
+st.caption("Live Multi-System Monitoring | Predict → Explain → Act")
 
-# ======================================================
-# DATA GENERATION (SIMULATED LIVE SYSTEM)
-# ======================================================
-np.random.seed(42)
-n = 800
+# =========================================================
+# ✅ GENERATE MULTI-SYSTEM DATA (AS PER SRS)
+# =========================================================
+@st.cache_data
+def generate_data():
+    np.random.seed(42)
+    n = 1000
 
-df = pd.DataFrame({
-    "Client_ID": range(10001, 10001+n),
-    "Jan": np.random.randint(100, 250, n),
-    "Feb": np.random.randint(80, 220, n),
-    "Mar": np.random.randint(60, 180, n),
-    "Apr": np.random.randint(30, 150, n),
-    "Complaints": np.random.randint(0, 10, n),
-    "Wallet_Share": np.random.uniform(0.1, 1, n),
-    "Interaction_Days": np.random.randint(1, 120, n),
-    "Revenue": np.random.randint(50000, 5000000, n)
-})
+    df = pd.DataFrame({
+        "Client_ID": range(10001, 10001+n),
 
-# Trend
-df["Trend"] = df["Apr"] - df["Jan"]
+        # 🔵 Trade System
+        "LC_Volume": np.random.randint(20, 200, n),
+        "Trade_Decline": np.random.randint(-80, 40, n),
 
-# Target (simulated churn)
-df["Churn"] = (
-    (df["Trend"] < -40) |
-    (df["Wallet_Share"] < 0.4) |
-    (df["Complaints"] > 5)
-).astype(int)
+        # 🟢 Treasury System
+        "FX_Conversion": np.random.uniform(0.2, 1, n),
+        "Wallet_Share": np.random.uniform(0.1, 1, n),
 
-# ======================================================
-# MODEL
-# ======================================================
-features = ["Jan","Feb","Mar","Apr","Complaints","Wallet_Share","Interaction_Days"]
+        # 🔴 CRM / RM System
+        "RM_Contacts": np.random.randint(0, 12, n),
+        "Interaction_Days": np.random.randint(1, 120, n),
 
-model = RandomForestClassifier()
+        # 🟡 Operations
+        "Complaints": np.random.randint(0, 10, n),
+        "SLA_Breach": np.random.uniform(0, 1, n),
+
+        # 🟣 Digital
+        "Digital_Usage": np.random.randint(0, 50, n),
+
+        # 💰 Revenue
+        "Revenue": np.random.randint(50000, 5000000, n)
+    })
+
+    # ===================================================
+    # ✅ TARGET CREATION (SIMULATED ATTRITION BEHAVIOR)
+    # ===================================================
+    df["Churn"] = (
+        (df["Trade_Decline"] < -40) |
+        (df["Wallet_Share"] < 0.4) |
+        (df["Complaints"] > 5) |
+        (df["Interaction_Days"] > 60)
+    ).astype(int)
+
+    return df
+
+df = generate_data()
+
+# =========================================================
+# ✅ MODEL (REAL PREDICTION)
+# =========================================================
+features = [
+    "LC_Volume","Trade_Decline","FX_Conversion",
+    "Wallet_Share","RM_Contacts","Interaction_Days",
+    "Complaints","SLA_Breach","Digital_Usage"
+]
+
+model = RandomForestClassifier(n_estimators=120)
 model.fit(df[features], df["Churn"])
 
-df["Score"] = (model.predict_proba(df[features])[:,1]*100).astype(int)
+df["Attrition_Score"] = (model.predict_proba(df[features])[:,1] * 100).astype(int)
 
+# =========================================================
+# ✅ RISK SEGMENTATION
+# =========================================================
 def risk(x):
     if x < 35: return "Low"
     elif x < 55: return "Watch"
@@ -55,127 +81,149 @@ def risk(x):
     elif x < 85: return "High"
     else: return "Critical"
 
-df["Risk"] = df["Score"].apply(risk)
+df["Risk"] = df["Attrition_Score"].apply(risk)
 
-# ======================================================
-# KPI CARDS
-# ======================================================
-st.subheader("📊 Enterprise Dashboard")
+# =========================================================
+# ✅ SIDEBAR NAVIGATION (FULL APP STRUCTURE)
+# =========================================================
+page = st.sidebar.radio("📂 Navigate", [
+    "📊 Executive Dashboard",
+    "🔵 Trade Analysis",
+    "🟢 Treasury Leakage",
+    "🔴 CRM Engagement",
+    "🟡 Operations (Friction)",
+    "🟣 Digital Behavior",
+    "🚨 Alerts & Workflow",
+    "🔍 Client 360"
+])
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Clients", len(df))
-c2.metric("Avg Score", int(df["Score"].mean()))
-c3.metric("High Risk", len(df[df["Risk"].isin(["High","Critical"])]))
-c4.metric("Revenue Risk", f"₹{df[df['Risk'].isin(['High','Critical'])]['Revenue'].sum():,.0f}")
+# =========================================================
+# 📊 EXECUTIVE DASHBOARD
+# =========================================================
+if page == "📊 Executive Dashboard":
 
-# ======================================================
-# 1. ALERT NOTIFICATIONS (REAL UI)
-# ======================================================
-st.subheader("🚨 Live Alerts")
+    st.subheader("Portfolio Overview")
 
-alerts = df[df["Risk"].isin(["High","Critical"])].sort_values(by="Score", ascending=False).head(5)
+    col1, col2, col3, col4 = st.columns(4)
 
-for _, row in alerts.iterrows():
-    st.toast(f"Client {row['Client_ID']} triggered ATTRITION ALERT | Score: {row['Score']}")
+    col1.metric("Clients", len(df))
+    col2.metric("Avg Score", int(df["Attrition_Score"].mean()))
+    col3.metric("High Risk", len(df[df["Risk"].isin(["High","Critical"])]))
+    col4.metric("Revenue Risk", f"₹{df[df['Risk'].isin(['High','Critical'])]['Revenue'].sum():,.0f}")
 
-# ======================================================
-# 2. CLIENT LIFECYCLE VISUALIZATION
-# ======================================================
-st.subheader("🔄 Client Lifecycle Flow")
+    st.markdown("### 📉 Risk Distribution")
+    st.plotly_chart(px.bar(df["Risk"].value_counts()))
 
-lifecycle_counts = df["Risk"].value_counts().reset_index()
-lifecycle_counts.columns = ["Stage","Clients"]
+    st.markdown("### 💰 Revenue Exposure")
+    st.plotly_chart(px.bar(df.groupby("Risk")["Revenue"].sum()))
 
-fig_life = px.bar(
-    lifecycle_counts,
-    x="Stage",
-    y="Clients",
-    color="Stage",
-    title="Client Movement Across Lifecycle Stages"
-)
+# =========================================================
+# 🔵 TRADE ANALYSIS
+# =========================================================
+elif page == "🔵 Trade Analysis":
 
-st.plotly_chart(fig_life, use_container_width=True)
+    st.subheader("Trade Behavior Insights")
 
-# ======================================================
-# 3. TIME-SERIES (PORTFOLIO LEVEL)
-# ======================================================
-st.subheader("📈 Portfolio Trend")
+    st.plotly_chart(px.histogram(df, x="Trade_Decline", title="Trade Decline Distribution"))
 
-avg_trend = [df["Jan"].mean(), df["Feb"].mean(), df["Mar"].mean(), df["Apr"].mean()]
+    st.write("""
+    👉 Falling LC volumes and trade decline indicate migration to competitors  
+    """)
 
-fig_trend = px.line(
-    x=["Jan","Feb","Mar","Apr"],
-    y=avg_trend,
-    markers=True,
-    title="Transaction Decline Trend"
-)
+# =========================================================
+# 🟢 TREASURY
+# =========================================================
+elif page == "🟢 Treasury Leakage":
 
-st.plotly_chart(fig_trend, use_container_width=True)
+    st.subheader("Treasury Leakage Analysis")
 
-# ======================================================
-# 4. REVENUE LOSS PREDICTION
-# ======================================================
-st.subheader("💰 Predicted Revenue Loss")
+    st.plotly_chart(px.histogram(df, x="Wallet_Share"))
 
-df["Predicted_Loss"] = df["Score"]/100 * df["Revenue"]
+    st.write("""
+    👉 Low wallet share = revenue shifting to other banks  
+    """)
 
-total_loss = df["Predicted_Loss"].sum()
+# =========================================================
+# 🔴 CRM
+# =========================================================
+elif page == "🔴 CRM Engagement":
 
-st.metric("Projected Revenue Loss", f"₹{total_loss:,.0f}")
+    st.subheader("RM Engagement")
 
-fig_loss = px.histogram(df, x="Predicted_Loss", title="Revenue Risk Distribution")
-st.plotly_chart(fig_loss, use_container_width=True)
+    st.plotly_chart(px.scatter(df, x="Interaction_Days", y="RM_Contacts"))
 
-# ======================================================
-# 5. SHAP EXPLAINABILITY
-# ======================================================
-st.subheader("🧠 AI Explainability")
+    st.write("""
+    👉 High interaction gap + low contact frequency = disengagement  
+    """)
 
-explainer = shap.TreeExplainer(model)
-sample = df[features].iloc[:100]
+# =========================================================
+# 🟡 OPERATIONS
+# =========================================================
+elif page == "🟡 Operations (Friction)":
 
-shap_values = explainer.shap_values(sample)
+    st.subheader("Service Friction")
 
-fig_shap = px.bar(
-    x=features,
-    y=np.abs(shap_values[1]).mean(axis=0),
-    title="Top Drivers of Attrition"
-)
+    st.plotly_chart(px.scatter(df, x="Complaints", y="SLA_Breach"))
 
-st.plotly_chart(fig_shap)
+    st.write("""
+    👉 High complaints + SLA breaches → service dissatisfaction  
+    """)
 
-# ======================================================
-# 6. CLIENT DEEP DIVE
-# ======================================================
-st.subheader("🔍 Client 360")
+# =========================================================
+# 🟣 DIGITAL
+# =========================================================
+elif page == "🟣 Digital Behavior":
 
-client_id = st.selectbox("Select Client", df["Client_ID"])
-client = df[df["Client_ID"] == client_id].iloc[0]
+    st.subheader("Digital Usage")
 
-colA, colB = st.columns(2)
+    st.plotly_chart(px.histogram(df, x="Digital_Usage"))
 
-with colA:
-    st.write(client)
+    st.write("""
+    👉 Drop in digital usage → early disengagement signal  
+    """)
 
-with colB:
-    st.write("### 📈 Client Trend")
+# =========================================================
+# 🚨 ALERTS
+# =========================================================
+elif page == "🚨 Alerts & Workflow":
 
-    fig_client = px.line(
-        x=["Jan","Feb","Mar","Apr"],
-        y=[client["Jan"],client["Feb"],client["Mar"],client["Apr"]],
-        markers=True
-    )
-    st.plotly_chart(fig_client)
+    st.subheader("Live Alert Feed")
 
-    st.write("### 🧠 Insights")
+    alerts = df[df["Risk"].isin(["High","Critical"])].sort_values(by="Attrition_Score", ascending=False).head(15)
 
-    if client["Trend"] < -40:
-        st.write("• Strong downward trend")
-    if client["Wallet_Share"] < 0.4:
-        st.write("• Wallet loss")
-    if client["Complaints"] > 5:
-        st.write("• High dissatisfaction")
+    for _, row in alerts.iterrows():
+        st.error(f"Client {row['Client_ID']} | Score {row['Attrition_Score']} → Immediate Action")
 
-    st.write("### 🎯 Action")
-    st.warning("Immediate RM engagement required")
+# =========================================================
+# 🔍 CLIENT 360
+# =========================================================
+elif page == "🔍 Client 360":
 
+    st.subheader("Client Deep Dive")
+
+    client_id = st.selectbox("Select Client", df["Client_ID"])
+    client = df[df["Client_ID"] == client_id].iloc[0]
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write(client)
+
+    with col2:
+        st.write("### AI Insights")
+
+        if client["Trade_Decline"] < -40:
+            st.write("• Trade volume dropping")
+        if client["Wallet_Share"] < 0.4:
+            st.write("• Wallet leakage")
+        if client["Complaints"] > 5:
+            st.write("• High complaints")
+        if client["Interaction_Days"] > 60:
+            st.write("• Low engagement")
+
+        st.write("### Action")
+
+        if client["Attrition_Score"] > 85:
+            st.error("Immediate escalation required")
+        else:
+            st.warning("RM follow-up needed")

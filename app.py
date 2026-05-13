@@ -208,4 +208,4 @@ if "df" in st.session_state:
             st.info("Monitor client")
 
 else:
-    st.warning("Initialize system from Overview page")AI Agent to start")
+    st.warning("👉 Initialize system from Overview page to start the AI Agent")

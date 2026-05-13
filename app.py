@@ -2,199 +2,180 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+import plotly.express as px
+import shap
 
 st.set_page_config(layout="wide")
 
-# ======================================================
-# HEADER (LIVE SYSTEM)
-# ======================================================
-st.title("🏦 TradePulse AI – Live Attrition Monitoring System")
-st.success("✅ System Status: LIVE | Monitoring 1,500 Active Clients")
+st.title("🏦 TradePulse AI - Enterprise Attrition Intelligence")
+st.caption("Real-Time Monitoring | Explainable AI | Decision Engine")
 
 # ======================================================
-# SIMULATE LIVE DATA (AUTO LOAD)
+# DATA GENERATION (SIMULATED LIVE SYSTEM)
 # ======================================================
-@st.cache_data
-def generate_data():
+np.random.seed(42)
+n = 800
 
-    np.random.seed(42)
-    n = 1500
+df = pd.DataFrame({
+    "Client_ID": range(10001, 10001+n),
+    "Jan": np.random.randint(100, 250, n),
+    "Feb": np.random.randint(80, 220, n),
+    "Mar": np.random.randint(60, 180, n),
+    "Apr": np.random.randint(30, 150, n),
+    "Complaints": np.random.randint(0, 10, n),
+    "Wallet_Share": np.random.uniform(0.1, 1, n),
+    "Interaction_Days": np.random.randint(1, 120, n),
+    "Revenue": np.random.randint(50000, 5000000, n)
+})
 
-    df = pd.DataFrame({
-        "Client_ID": range(10001, 10001+n),
-        "Transactions_30d": np.random.randint(1, 80, n),
-        "Transactions_90d": np.random.randint(50, 200, n),
-        "Transaction_Value": np.random.randint(1000, 100000, n),
-        "Complaints_90d": np.random.randint(0, 10, n),
-        "SLA_Breach_Rate": np.random.uniform(0, 1, n),
-        "Interaction_Days": np.random.randint(1, 180, n),
-        "RM_Contacts": np.random.randint(0, 15, n),
-        "Wallet_Share": np.random.uniform(0.1, 1, n),
-        "Digital_Usage": np.random.randint(0, 50, n),
-        "Revenue": np.random.randint(50000, 5000000, n)
-    })
+# Trend
+df["Trend"] = df["Apr"] - df["Jan"]
 
-    # Behavioral change simulation
-    df["Transaction_Trend"] = df["Transactions_30d"] - (df["Transactions_90d"] / 3)
-
-    # Label (simulated attrition pattern)
-    df["Churn_Flag"] = (
-        (df["Transaction_Trend"] < -10) |
-        (df["Wallet_Share"] < 0.3) |
-        (df["Complaints_90d"] > 5) |
-        (df["Interaction_Days"] > 60)
-    ).astype(int)
-
-    return df
-
-
-df = generate_data()
+# Target (simulated churn)
+df["Churn"] = (
+    (df["Trend"] < -40) |
+    (df["Wallet_Share"] < 0.4) |
+    (df["Complaints"] > 5)
+).astype(int)
 
 # ======================================================
-# MODEL (RUNS AUTOMATICALLY)
+# MODEL
 # ======================================================
-features = [
-    "Transactions_30d", "Transaction_Value", "Complaints_90d",
-    "SLA_Breach_Rate", "Interaction_Days",
-    "RM_Contacts", "Wallet_Share",
-    "Digital_Usage", "Transaction_Trend"
-]
+features = ["Jan","Feb","Mar","Apr","Complaints","Wallet_Share","Interaction_Days"]
 
-model = RandomForestClassifier(n_estimators=100)
-model.fit(df[features], df["Churn_Flag"])
+model = RandomForestClassifier()
+model.fit(df[features], df["Churn"])
 
-df["Attrition_Probability"] = model.predict_proba(df[features])[:, 1]
-df["Score"] = (df["Attrition_Probability"] * 100).astype(int)
+df["Score"] = (model.predict_proba(df[features])[:,1]*100).astype(int)
 
-# ======================================================
-# RISK SEGMENT
-# ======================================================
-def risk(score):
-    if score < 35: return "Low"
-    elif score < 55: return "Watch"
-    elif score < 70: return "Medium"
-    elif score < 85: return "High"
+def risk(x):
+    if x < 35: return "Low"
+    elif x < 55: return "Watch"
+    elif x < 70: return "Medium"
+    elif x < 85: return "High"
     else: return "Critical"
 
 df["Risk"] = df["Score"].apply(risk)
 
 # ======================================================
-# SIDEBAR NAVIGATION
+# KPI CARDS
 # ======================================================
-page = st.sidebar.radio("Navigation", [
-    "📊 Executive Dashboard",
-    "🚨 Live Alerts",
-    "📉 Driver Analysis",
-    "💰 Revenue at Risk",
-    "📋 Client Portfolio",
-    "🔍 Client Deep Dive"
-])
+st.subheader("📊 Enterprise Dashboard")
 
-# ======================================================
-# 📊 EXECUTIVE DASHBOARD
-# ======================================================
-if page == "📊 Executive Dashboard":
-
-    st.subheader("Portfolio Health Overview")
-
-    avg_score = int(df["Score"].mean())
-    high_risk = len(df[df["Risk"].isin(["High","Critical"])])
-    revenue_risk = df[df["Risk"].isin(["High","Critical"])]["Revenue"].sum()
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("Avg Attrition Score", avg_score)
-    col2.metric("High Risk Clients", high_risk)
-    col3.metric("Critical Clients", len(df[df["Risk"]=="Critical"]))
-    col4.metric("Revenue at Risk", f"₹{revenue_risk:,.0f}")
-
-    st.write("### 🧠 Interpretation")
-
-    if avg_score < 40:
-        st.success("Portfolio Stable")
-    elif avg_score < 70:
-        st.warning("Moderate Risk Emerging")
-    else:
-        st.error("High Attrition Risk Detected")
-
-    st.write("### 📉 Risk Distribution")
-    st.bar_chart(df["Risk"].value_counts())
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Clients", len(df))
+c2.metric("Avg Score", int(df["Score"].mean()))
+c3.metric("High Risk", len(df[df["Risk"].isin(["High","Critical"])]))
+c4.metric("Revenue Risk", f"₹{df[df['Risk'].isin(['High','Critical'])]['Revenue'].sum():,.0f}")
 
 # ======================================================
-# 🚨 LIVE ALERTS
+# 1. ALERT NOTIFICATIONS (REAL UI)
 # ======================================================
-elif page == "🚨 Live Alerts":
+st.subheader("🚨 Live Alerts")
 
-    st.subheader("Real-Time Attrition Alerts")
+alerts = df[df["Risk"].isin(["High","Critical"])].sort_values(by="Score", ascending=False).head(5)
 
-    alerts = df[df["Risk"].isin(["High","Critical"])].sort_values(by="Score", ascending=False).head(20)
-
-    st.dataframe(alerts)
-
-    st.warning("👉 These clients require immediate RM intervention")
+for _, row in alerts.iterrows():
+    st.toast(f"Client {row['Client_ID']} triggered ATTRITION ALERT | Score: {row['Score']}")
 
 # ======================================================
-# 📉 DRIVER ANALYSIS
+# 2. CLIENT LIFECYCLE VISUALIZATION
 # ======================================================
-elif page == "📉 Driver Analysis":
+st.subheader("🔄 Client Lifecycle Flow")
 
-    st.subheader("Root Cause Analysis")
+lifecycle_counts = df["Risk"].value_counts().reset_index()
+lifecycle_counts.columns = ["Stage","Clients"]
 
-    drivers = {
-        "Transaction Drop": len(df[df["Transaction_Trend"] < -10]),
-        "High Complaints": len(df[df["Complaints_90d"] > 5]),
-        "Low Engagement": len(df[df["Interaction_Days"] > 60]),
-        "Wallet Leakage": len(df[df["Wallet_Share"] < 0.4])
-    }
+fig_life = px.bar(
+    lifecycle_counts,
+    x="Stage",
+    y="Clients",
+    color="Stage",
+    title="Client Movement Across Lifecycle Stages"
+)
 
-    driver_df = pd.DataFrame(list(drivers.items()), columns=["Driver", "Clients"])
-
-    st.bar_chart(driver_df.set_index("Driver"))
-
-# ======================================================
-# 💰 REVENUE
-# ======================================================
-elif page == "💰 Revenue at Risk":
-
-    st.subheader("Revenue Exposure")
-
-    st.bar_chart(df.groupby("Risk")["Revenue"].sum())
-
-    st.write("👉 Indicates financial impact of attrition")
+st.plotly_chart(fig_life, use_container_width=True)
 
 # ======================================================
-# 📋 PORTFOLIO
+# 3. TIME-SERIES (PORTFOLIO LEVEL)
 # ======================================================
-elif page == "📋 Client Portfolio":
+st.subheader("📈 Portfolio Trend")
 
-    st.subheader("Active Client Portfolio")
+avg_trend = [df["Jan"].mean(), df["Feb"].mean(), df["Mar"].mean(), df["Apr"].mean()]
 
-    st.dataframe(df)
+fig_trend = px.line(
+    x=["Jan","Feb","Mar","Apr"],
+    y=avg_trend,
+    markers=True,
+    title="Transaction Decline Trend"
+)
+
+st.plotly_chart(fig_trend, use_container_width=True)
 
 # ======================================================
-# 🔍 CLIENT VIEW
+# 4. REVENUE LOSS PREDICTION
 # ======================================================
-elif page == "🔍 Client Deep Dive":
+st.subheader("💰 Predicted Revenue Loss")
 
-    selected = st.selectbox("Select Client", df["Client_ID"])
-    client = df[df["Client_ID"] == selected].iloc[0]
+df["Predicted_Loss"] = df["Score"]/100 * df["Revenue"]
 
+total_loss = df["Predicted_Loss"].sum()
+
+st.metric("Projected Revenue Loss", f"₹{total_loss:,.0f}")
+
+fig_loss = px.histogram(df, x="Predicted_Loss", title="Revenue Risk Distribution")
+st.plotly_chart(fig_loss, use_container_width=True)
+
+# ======================================================
+# 5. SHAP EXPLAINABILITY
+# ======================================================
+st.subheader("🧠 AI Explainability")
+
+explainer = shap.TreeExplainer(model)
+sample = df[features].iloc[:100]
+
+shap_values = explainer.shap_values(sample)
+
+fig_shap = px.bar(
+    x=features,
+    y=np.abs(shap_values[1]).mean(axis=0),
+    title="Top Drivers of Attrition"
+)
+
+st.plotly_chart(fig_shap)
+
+# ======================================================
+# 6. CLIENT DEEP DIVE
+# ======================================================
+st.subheader("🔍 Client 360")
+
+client_id = st.selectbox("Select Client", df["Client_ID"])
+client = df[df["Client_ID"] == client_id].iloc[0]
+
+colA, colB = st.columns(2)
+
+with colA:
     st.write(client)
 
-    st.subheader("🧠 Insight Summary")
+with colB:
+    st.write("### 📈 Client Trend")
 
-    if client["Transaction_Trend"] < -10:
-        st.write("• Declining transactions detected")
-    if client["Complaints_90d"] > 5:
-        st.write("• High complaints → dissatisfaction")
-    if client["Interaction_Days"] > 60:
-        st.write("• Low RM engagement")
+    fig_client = px.line(
+        x=["Jan","Feb","Mar","Apr"],
+        y=[client["Jan"],client["Feb"],client["Mar"],client["Apr"]],
+        markers=True
+    )
+    st.plotly_chart(fig_client)
+
+    st.write("### 🧠 Insights")
+
+    if client["Trend"] < -40:
+        st.write("• Strong downward trend")
     if client["Wallet_Share"] < 0.4:
-        st.write("• Wallet share erosion")
+        st.write("• Wallet loss")
+    if client["Complaints"] > 5:
+        st.write("• High dissatisfaction")
 
-    st.subheader("🎯 Recommended Action")
+    st.write("### 🎯 Action")
+    st.warning("Immediate RM engagement required")
 
-    if client["Score"] > 85:
-        st.error("Immediate escalation required")
-    else:
-        st.warning("RM follow-up required")

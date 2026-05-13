@@ -1,74 +1,77 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from sklearn.ensemble import RandomForestClassifier
 
 st.set_page_config(layout="wide")
 
-st.title("🧠 TradePulse AI – Client Attrition Intelligence Agent")
+st.title("🧠 TradePulse AI - Full Attrition Prediction Platform")
 
-st.markdown("### Multi-Dimensional Attrition Monitoring System")
-
-# -----------------------------------------------------
-# LAYER 1: DATA GENERATION (Simulates source systems)
-# -----------------------------------------------------
-if st.button("🚀 Initialize AI Agent"):
+# ----------------------------------------------------
+# INITIALIZE LARGE DATASET
+# ----------------------------------------------------
+if st.button("🚀 Initialize AI System"):
 
     np.random.seed(42)
-    n = 150
+
+    n = 1200  # LARGE dataset
 
     df = pd.DataFrame({
         "Client_ID": range(1, n+1),
-        "Transaction_Volume": np.random.randint(1, 50, n),
-        "Transaction_Value": np.random.randint(5000, 50000, n),
-        "Complaint_Count": np.random.randint(0, 8, n),
-        "SLA_Breach": np.random.uniform(0, 0.5, n),
-        "Interaction_Gap": np.random.randint(1, 120, n),
-        "RM_Contact": np.random.randint(0, 10, n),
-        "Wallet_Share": np.random.uniform(0.2, 1.0, n),
-        "Digital_Usage": np.random.randint(0, 30, n)
+        "Transactions": np.random.randint(1, 80, n),
+        "Transaction_Value": np.random.randint(1000, 100000, n),
+        "Complaints": np.random.randint(0, 10, n),
+        "SLA_Breach": np.random.uniform(0, 1, n),
+        "Interaction_Gap": np.random.randint(1, 180, n),
+        "RM_Contacts": np.random.randint(0, 15, n),
+        "Wallet_Share": np.random.uniform(0.1, 1, n),
+        "Digital_Usage": np.random.randint(0, 50, n),
+        "Product_Usage": np.random.randint(1, 10, n)
     })
 
-    st.session_state.data = df
+    # ---------------------------------------
+    # CREATE REALISTIC CHURN TARGET
+    # ---------------------------------------
+    df["Churn_Flag"] = (
+        (df["Transactions"] < 10) &
+        (df["Interaction_Gap"] > 60) |
+        (df["Wallet_Share"] < 0.3) |
+        (df["Complaints"] > 5)
+    ).astype(int)
 
-# -----------------------------------------------------
-# LAYER 2–5: FEATURE ENGINEERING + MODEL + SCORING
-# -----------------------------------------------------
-if "data" in st.session_state:
+    st.session_state.df = df
 
-    df = st.session_state.data.copy()
+# ----------------------------------------------------
+# MODEL + DASHBOARD
+# ----------------------------------------------------
+if "df" in st.session_state:
 
-    # Feature Engineering
-    df["Engagement_Score"] = df["RM_Contact"] / (df["Interaction_Gap"] + 1)
-    df["Friction_Score"] = df["Complaint_Count"] * df["SLA_Breach"]
-    df["Revenue_Proxy"] = df["Transaction_Volume"] * df["Transaction_Value"]
+    df = st.session_state.df.copy()
 
-    # Simulated AI scoring (ensemble-style logic)
-    def compute_scores(row):
+    # ------------------------------------------------
+    # MODEL TRAINING (REAL PREDICTION)
+    # ------------------------------------------------
+    features = [
+        "Transactions", "Transaction_Value", "Complaints",
+        "SLA_Breach", "Interaction_Gap", "RM_Contacts",
+        "Wallet_Share", "Digital_Usage", "Product_Usage"
+    ]
 
-        # Behavioral Drift
-        drift = max(0, 30 - row["Transaction_Volume"])
+    X = df[features]
+    y = df["Churn_Flag"]
 
-        # Friction
-        friction = row["Friction_Score"] * 20
+    model = RandomForestClassifier(n_estimators=120)
+    model.fit(X, y)
 
-        # Engagement decay
-        engagement = row["Interaction_Gap"] * 0.4 - row["RM_Contact"] * 2
+    # ------------------------------------------------
+    # PREDICTION
+    # ------------------------------------------------
+    df["Churn_Probability"] = model.predict_proba(X)[:, 1]
+    df["Score"] = (df["Churn_Probability"] * 100).astype(int)
 
-        # Wallet erosion
-        wallet = (1 - row["Wallet_Share"]) * 50
-
-        # Digital drop
-        digital = (30 - row["Digital_Usage"])
-
-        # FINAL ATTRITION SCORE
-        aps = drift + friction + engagement + wallet + digital
-        aps = max(0, min(aps, 100))
-
-        return pd.Series([aps, wallet, friction, engagement, digital])
-
-    df[["APS", "Wallet_Leakage", "Friction", "Engagement", "Digital"]] = df.apply(compute_scores, axis=1)
-
-    # Risk category
+    # ------------------------------------------------
+    # RISK SEGMENT
+    # ------------------------------------------------
     def risk(score):
         if score < 35: return "Low"
         elif score < 55: return "Watch"
@@ -76,69 +79,115 @@ if "data" in st.session_state:
         elif score < 85: return "High"
         else: return "Critical"
 
-    df["Risk"] = df["APS"].apply(risk)
+    df["Risk"] = df["Score"].apply(risk)
 
-# -----------------------------------------------------
-# LAYER 6: DASHBOARD / INTELLIGENCE LAYER
-# -----------------------------------------------------
-    st.subheader("📊 Portfolio Intelligence")
+    # ------------------------------------------------
+    # PAGE NAVIGATION
+    # ------------------------------------------------
+    page = st.sidebar.radio("Navigation", [
+        "Overview",
+        "Portfolio",
+        "High Risk",
+        "Client Drilldown"
+    ])
 
-    col1, col2, col3, col4 = st.columns(4)
+# ----------------------------------------------------
+# PAGE 1 - OVERVIEW
+# ----------------------------------------------------
+    if page == "Overview":
 
-    col1.metric("Clients", len(df))
-    col2.metric("Avg APS", int(df["APS"].mean()))
-    col3.metric("High Risk", len(df[df["Risk"].isin(["High","Critical"])]))
-    col4.metric("Critical", len(df[df["Risk"]=="Critical"]))
+        st.subheader("📊 Portfolio Overview")
 
-    st.bar_chart(df["Risk"].value_counts())
+        col1, col2, col3, col4 = st.columns(4)
 
-# -----------------------------------------------------
-# LAYER 7: RM ACTION LAYER
-# -----------------------------------------------------
-    st.subheader("🚨 RM Priority Queue")
+        col1.metric("Clients", len(df))
+        col2.metric("Avg Score", int(df["Score"].mean()))
+        col3.metric("High Risk Clients", len(df[df["Risk"].isin(["High","Critical"])]))
+        col4.metric("Critical", len(df[df["Risk"]=="Critical"]))
 
-    priority = df.sort_values(by="APS", ascending=False).head(10)
-    st.dataframe(priority)
+        st.subheader("🔴 Risk Distribution")
+        st.bar_chart(df["Risk"].value_counts())
 
-# -----------------------------------------------------
-# LAYER 8: DRILLDOWN INTELLIGENCE
-# -----------------------------------------------------
-    st.subheader("🔍 Client Deep Dive")
+# ----------------------------------------------------
+# PAGE 2 - FULL PORTFOLIO
+# ----------------------------------------------------
+    elif page == "Portfolio":
 
-    selected = st.selectbox("Select Client", df["Client_ID"])
+        st.subheader("📋 Full Customer Portfolio")
 
-    client = df[df["Client_ID"] == selected].iloc[0]
+        st.dataframe(df)
 
-    st.write("### Client Profile")
-    st.write(client)
+# ----------------------------------------------------
+# PAGE 3 - HIGH RISK
+# ----------------------------------------------------
+    elif page == "High Risk":
 
-    st.write("### AI Explanation (Drivers)")
+        st.subheader("🚨 Priority Customer List")
 
-    drivers = []
-    if client["Transaction_Volume"] < 5:
-        drivers.append("Declining transaction activity")
-    if client["Complaint_Count"] > 3:
-        drivers.append("High complaints / service friction")
-    if client["Interaction_Gap"] > 60:
-        drivers.append("Low RM engagement")
-    if client["Wallet_Share"] < 0.4:
-        drivers.append("Wallet share erosion")
-    if client["Digital_Usage"] < 5:
-        drivers.append("Digital disengagement")
+        high = df[df["Risk"].isin(["High", "Critical"])]
 
-    for d in drivers:
-        st.write("•", d)
+        st.dataframe(high.sort_values(by="Score", ascending=False).head(50))
 
-# -----------------------------------------------------
-# ACTION ENGINE (CRITICAL FOR SRS)
-# -----------------------------------------------------
-    st.write("### 🎯 Recommended Action")
+# ----------------------------------------------------
+# PAGE 4 - DRILLDOWN
+# ----------------------------------------------------
+    elif page == "Client Drilldown":
 
-    if client["APS"] > 85:
-        st.error("Immediate escalation – Pricing + Senior RM intervention")
-    elif client["APS"] > 70:
-        st.warning("High priority RM engagement")
-    elif client["APS"] > 55:
-        st.info("Monitor & proactive outreach")
-    else:
-        st.success("Healthy client")
+        st.subheader("🔍 Client Analysis")
+
+        selected = st.selectbox("Select Client", df["Client_ID"])
+
+        client = df[df["Client_ID"] == selected].iloc[0]
+
+        st.write("### Client Details")
+        st.write(client)
+
+        # ----------------------------------------
+        # FEATURE IMPORTANCE (Explainability)
+        # ----------------------------------------
+        st.write("### AI Feature Importance")
+
+        importance = pd.DataFrame({
+            "Feature": features,
+            "Importance": model.feature_importances_
+        }).sort_values(by="Importance", ascending=False)
+
+        st.dataframe(importance)
+
+        # ----------------------------------------
+        # DRIVERS
+        # ----------------------------------------
+        st.write("### Key Risk Drivers")
+
+        drivers = []
+
+        if client["Transactions"] < 10:
+            drivers.append("Low transaction activity")
+        if client["Complaints"] > 5:
+            drivers.append("High complaints")
+        if client["Interaction_Gap"] > 60:
+            drivers.append("Low engagement")
+        if client["Wallet_Share"] < 0.4:
+            drivers.append("Wallet share erosion")
+        if client["Digital_Usage"] < 5:
+            drivers.append("Digital disengagement")
+
+        for d in drivers:
+            st.write("•", d)
+
+        # ----------------------------------------
+        # ACTION ENGINE
+        # ----------------------------------------
+        st.write("### 🎯 Recommended Action")
+
+        if client["Score"] > 85:
+            st.error("Immediate escalation (RM + pricing)")
+        elif client["Score"] > 70:
+            st.warning("High priority RM intervention")
+        elif client["Score"] > 55:
+            st.info("Monitor closely")
+        else:
+            st.success("Healthy client")
+
+else:
+    st.info("Click 'Initialize AI System' to start")

@@ -1,4 +1,4 @@
-import streamlit as stimport streamlit as pandas as pd
+import streamlit as pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 

@@ -5,16 +5,19 @@ from sklearn.ensemble import RandomForestClassifier
 
 st.set_page_config(layout="wide")
 
-st.title("🧠 TradePulse AI - Full Attrition Prediction Platform")
+# -------------------------------------------------------
+# HEADER
+# -------------------------------------------------------
+st.title("🧠 TradePulse AI – Attrition Intelligence Dashboard")
+st.markdown("### Predict | Explain | Act")
 
-# ----------------------------------------------------
-# INITIALIZE LARGE DATASET
-# ----------------------------------------------------
-if st.button("🚀 Initialize AI System"):
+# -------------------------------------------------------
+# INIT DATA
+# -------------------------------------------------------
+if st.button("🚀 Initialize System"):
 
     np.random.seed(42)
-
-    n = 1200  # LARGE dataset
+    n = 1500
 
     df = pd.DataFrame({
         "Client_ID": range(1, n+1),
@@ -26,12 +29,11 @@ if st.button("🚀 Initialize AI System"):
         "RM_Contacts": np.random.randint(0, 15, n),
         "Wallet_Share": np.random.uniform(0.1, 1, n),
         "Digital_Usage": np.random.randint(0, 50, n),
-        "Product_Usage": np.random.randint(1, 10, n)
+        "Product_Usage": np.random.randint(1, 12, n),
+        "Revenue": np.random.randint(50000, 5000000, n)
     })
 
-    # ---------------------------------------
-    # CREATE REALISTIC CHURN TARGET
-    # ---------------------------------------
+    # Simulated Real Behavior
     df["Churn_Flag"] = (
         (df["Transactions"] < 10) &
         (df["Interaction_Gap"] > 60) |
@@ -41,37 +43,26 @@ if st.button("🚀 Initialize AI System"):
 
     st.session_state.df = df
 
-# ----------------------------------------------------
-# MODEL + DASHBOARD
-# ----------------------------------------------------
+# -------------------------------------------------------
+# MAIN APP
+# -------------------------------------------------------
 if "df" in st.session_state:
 
     df = st.session_state.df.copy()
 
-    # ------------------------------------------------
-    # MODEL TRAINING (REAL PREDICTION)
-    # ------------------------------------------------
+    # MODEL
     features = [
-        "Transactions", "Transaction_Value", "Complaints",
-        "SLA_Breach", "Interaction_Gap", "RM_Contacts",
-        "Wallet_Share", "Digital_Usage", "Product_Usage"
+        "Transactions","Transaction_Value","Complaints",
+        "SLA_Breach","Interaction_Gap","RM_Contacts",
+        "Wallet_Share","Digital_Usage","Product_Usage"
     ]
 
-    X = df[features]
-    y = df["Churn_Flag"]
-
     model = RandomForestClassifier(n_estimators=120)
-    model.fit(X, y)
+    model.fit(df[features], df["Churn_Flag"])
 
-    # ------------------------------------------------
-    # PREDICTION
-    # ------------------------------------------------
-    df["Churn_Probability"] = model.predict_proba(X)[:, 1]
-    df["Score"] = (df["Churn_Probability"] * 100).astype(int)
+    df["Probability"] = model.predict_proba(df[features])[:,1]
+    df["Score"] = (df["Probability"] * 100).astype(int)
 
-    # ------------------------------------------------
-    # RISK SEGMENT
-    # ------------------------------------------------
     def risk(score):
         if score < 35: return "Low"
         elif score < 55: return "Watch"
@@ -81,113 +72,132 @@ if "df" in st.session_state:
 
     df["Risk"] = df["Score"].apply(risk)
 
-    # ------------------------------------------------
-    # PAGE NAVIGATION
-    # ------------------------------------------------
-    page = st.sidebar.radio("Navigation", [
-        "Overview",
-        "Portfolio",
-        "High Risk",
-        "Client Drilldown"
+# -------------------------------------------------------
+# NAVIGATION
+# -------------------------------------------------------
+    page = st.sidebar.radio("🔍 Navigation", [
+        "Executive Overview",
+        "Risk Analytics",
+        "RM Priority View",
+        "Client 360° View"
     ])
 
-# ----------------------------------------------------
-# PAGE 1 - OVERVIEW
-# ----------------------------------------------------
-    if page == "Overview":
+# -------------------------------------------------------
+# EXECUTIVE VIEW
+# -------------------------------------------------------
+    if page == "Executive Overview":
 
         st.subheader("📊 Portfolio Overview")
 
         col1, col2, col3, col4 = st.columns(4)
 
-        col1.metric("Clients", len(df))
-        col2.metric("Avg Score", int(df["Score"].mean()))
+        col1.metric("Total Clients", len(df))
+        col2.metric("Avg Risk Score", int(df["Score"].mean()))
         col3.metric("High Risk Clients", len(df[df["Risk"].isin(["High","Critical"])]))
-        col4.metric("Critical", len(df[df["Risk"]=="Critical"]))
+        col4.metric("Revenue at Risk", f"₹{df[df['Risk'].isin(['High','Critical'])]['Revenue'].sum():,.0f}")
 
-        st.subheader("🔴 Risk Distribution")
+        st.markdown("### 🔴 Risk Distribution")
         st.bar_chart(df["Risk"].value_counts())
 
-# ----------------------------------------------------
-# PAGE 2 - FULL PORTFOLIO
-# ----------------------------------------------------
-    elif page == "Portfolio":
+        st.markdown("### 💰 Revenue Risk Analysis")
+        st.bar_chart(df.groupby("Risk")["Revenue"].sum())
 
-        st.subheader("📋 Full Customer Portfolio")
+# -------------------------------------------------------
+# RISK ANALYTICS
+# -------------------------------------------------------
+    elif page == "Risk Analytics":
 
-        st.dataframe(df)
+        st.subheader("📈 Behavior Insights")
 
-# ----------------------------------------------------
-# PAGE 3 - HIGH RISK
-# ----------------------------------------------------
-    elif page == "High Risk":
+        st.line_chart(df.sort_values("Client_ID")["Transactions"])
 
-        st.subheader("🚨 Priority Customer List")
+        st.subheader("⚠️ Key Risk Indicators")
 
-        high = df[df["Risk"].isin(["High", "Critical"])]
+        col1, col2 = st.columns(2)
 
-        st.dataframe(high.sort_values(by="Score", ascending=False).head(50))
+        with col1:
+            st.write("High Complaints Clients:",
+                     len(df[df["Complaints"] > 5]))
 
-# ----------------------------------------------------
-# PAGE 4 - DRILLDOWN
-# ----------------------------------------------------
-    elif page == "Client Drilldown":
+            st.write("Low Engagement Clients:",
+                     len(df[df["Interaction_Gap"] > 60]))
 
-        st.subheader("🔍 Client Analysis")
+        with col2:
+            st.write("Low Wallet Share:",
+                     len(df[df["Wallet_Share"] < 0.4]))
+
+            st.write("Digital Drop-off:",
+                     len(df[df["Digital_Usage"] < 5]))
+
+# -------------------------------------------------------
+# RM PRIORITY VIEW
+# -------------------------------------------------------
+    elif page == "RM Priority View":
+
+        st.subheader("🚨 Top Clients to Act On")
+
+        priority = df.sort_values(by="Score", ascending=False).head(15)
+
+        st.dataframe(priority)
+
+        st.markdown("### 🎯 Suggested RM Strategy")
+
+        st.write("""
+        • Immediate outreach to top 10 risky clients  
+        • Pricing review for wallet share loss  
+        • Digital onboarding for low engagement  
+        """)
+
+# -------------------------------------------------------
+# CLIENT 360 VIEW
+# -------------------------------------------------------
+    elif page == "Client 360° View":
+
+        st.subheader("🔍 Client Deep Dive")
 
         selected = st.selectbox("Select Client", df["Client_ID"])
 
         client = df[df["Client_ID"] == selected].iloc[0]
 
-        st.write("### Client Details")
-        st.write(client)
+        col1, col2 = st.columns(2)
 
-        # ----------------------------------------
-        # FEATURE IMPORTANCE (Explainability)
-        # ----------------------------------------
-        st.write("### AI Feature Importance")
+        with col1:
+            st.write("### Client Profile")
+            st.write(client)
 
-        importance = pd.DataFrame({
-            "Feature": features,
-            "Importance": model.feature_importances_
-        }).sort_values(by="Importance", ascending=False)
+        with col2:
+            st.write("### AI Explanation")
 
-        st.dataframe(importance)
+            insights = []
 
-        # ----------------------------------------
-        # DRIVERS
-        # ----------------------------------------
-        st.write("### Key Risk Drivers")
+            if client["Transactions"] < 10:
+                insights.append("Transaction activity is dropping → migration risk")
 
-        drivers = []
+            if client["Complaints"] > 5:
+                insights.append("High complaints → dissatisfaction")
 
-        if client["Transactions"] < 10:
-            drivers.append("Low transaction activity")
-        if client["Complaints"] > 5:
-            drivers.append("High complaints")
-        if client["Interaction_Gap"] > 60:
-            drivers.append("Low engagement")
-        if client["Wallet_Share"] < 0.4:
-            drivers.append("Wallet share erosion")
-        if client["Digital_Usage"] < 5:
-            drivers.append("Digital disengagement")
+            if client["Interaction_Gap"] > 60:
+                insights.append("Low RM engagement")
 
-        for d in drivers:
-            st.write("•", d)
+            if client["Wallet_Share"] < 0.4:
+                insights.append("Wallet share erosion → competitor gaining")
 
-        # ----------------------------------------
-        # ACTION ENGINE
-        # ----------------------------------------
-        st.write("### 🎯 Recommended Action")
+            if client["Digital_Usage"] < 5:
+                insights.append("Digital disengagement")
 
-        if client["Score"] > 85:
-            st.error("Immediate escalation (RM + pricing)")
-        elif client["Score"] > 70:
-            st.warning("High priority RM intervention")
-        elif client["Score"] > 55:
-            st.info("Monitor closely")
-        else:
-            st.success("Healthy client")
+            for i in insights:
+                st.write("•", i)
+
+            st.write("### 🎯 Action Recommendation")
+
+            if client["Score"] > 85:
+                st.error("Immediate escalation needed")
+            elif client["Score"] > 70:
+                st.warning("High priority RM intervention")
+            elif client["Score"] > 55:
+                st.info("Monitor closely")
+            else:
+                st.success("Client stable")
 
 else:
-    st.info("Click 'Initialize AI System' to start")
+    st.info("Click 'Initialize System' to load AI model")

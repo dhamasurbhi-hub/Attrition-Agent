@@ -5,207 +5,196 @@ from sklearn.ensemble import RandomForestClassifier
 
 st.set_page_config(layout="wide")
 
-# =========================================================
-# TITLE
-# =========================================================
-st.title("🧠 TradePulse AI – Production Attrition Intelligence Platform")
+# ======================================================
+# HEADER (LIVE SYSTEM)
+# ======================================================
+st.title("🏦 TradePulse AI – Live Attrition Monitoring System")
+st.success("✅ System Status: LIVE | Monitoring 1,500 Active Clients")
 
-# =========================================================
-# SIDEBAR NAVIGATION (REAL APP FEEL)
-# =========================================================
-page = st.sidebar.radio("📂 Navigation", [
-    "📌 Overview",
-    "📊 Portfolio Dashboard",
-    "📉 Driver Analytics",
-    "💰 Revenue Impact",
-    "🚨 RM Priority Queue",
-    "🔍 Client 360 View"
+# ======================================================
+# SIMULATE LIVE DATA (AUTO LOAD)
+# ======================================================
+@st.cache_data
+def generate_data():
+
+    np.random.seed(42)
+    n = 1500
+
+    df = pd.DataFrame({
+        "Client_ID": range(10001, 10001+n),
+        "Transactions_30d": np.random.randint(1, 80, n),
+        "Transactions_90d": np.random.randint(50, 200, n),
+        "Transaction_Value": np.random.randint(1000, 100000, n),
+        "Complaints_90d": np.random.randint(0, 10, n),
+        "SLA_Breach_Rate": np.random.uniform(0, 1, n),
+        "Interaction_Days": np.random.randint(1, 180, n),
+        "RM_Contacts": np.random.randint(0, 15, n),
+        "Wallet_Share": np.random.uniform(0.1, 1, n),
+        "Digital_Usage": np.random.randint(0, 50, n),
+        "Revenue": np.random.randint(50000, 5000000, n)
+    })
+
+    # Behavioral change simulation
+    df["Transaction_Trend"] = df["Transactions_30d"] - (df["Transactions_90d"] / 3)
+
+    # Label (simulated attrition pattern)
+    df["Churn_Flag"] = (
+        (df["Transaction_Trend"] < -10) |
+        (df["Wallet_Share"] < 0.3) |
+        (df["Complaints_90d"] > 5) |
+        (df["Interaction_Days"] > 60)
+    ).astype(int)
+
+    return df
+
+
+df = generate_data()
+
+# ======================================================
+# MODEL (RUNS AUTOMATICALLY)
+# ======================================================
+features = [
+    "Transactions_30d", "Transaction_Value", "Complaints_90d",
+    "SLA_Breach_Rate", "Interaction_Days",
+    "RM_Contacts", "Wallet_Share",
+    "Digital_Usage", "Transaction_Trend"
+]
+
+model = RandomForestClassifier(n_estimators=100)
+model.fit(df[features], df["Churn_Flag"])
+
+df["Attrition_Probability"] = model.predict_proba(df[features])[:, 1]
+df["Score"] = (df["Attrition_Probability"] * 100).astype(int)
+
+# ======================================================
+# RISK SEGMENT
+# ======================================================
+def risk(score):
+    if score < 35: return "Low"
+    elif score < 55: return "Watch"
+    elif score < 70: return "Medium"
+    elif score < 85: return "High"
+    else: return "Critical"
+
+df["Risk"] = df["Score"].apply(risk)
+
+# ======================================================
+# SIDEBAR NAVIGATION
+# ======================================================
+page = st.sidebar.radio("Navigation", [
+    "📊 Executive Dashboard",
+    "🚨 Live Alerts",
+    "📉 Driver Analysis",
+    "💰 Revenue at Risk",
+    "📋 Client Portfolio",
+    "🔍 Client Deep Dive"
 ])
 
-# =========================================================
-# INITIALIZATION BUTTON
-# =========================================================
-if "df" not in st.session_state:
+# ======================================================
+# 📊 EXECUTIVE DASHBOARD
+# ======================================================
+if page == "📊 Executive Dashboard":
 
-    st.subheader("🚀 Start AI Agent")
+    st.subheader("Portfolio Health Overview")
 
-    if st.button("Initialize System"):
+    avg_score = int(df["Score"].mean())
+    high_risk = len(df[df["Risk"].isin(["High","Critical"])])
+    revenue_risk = df[df["Risk"].isin(["High","Critical"])]["Revenue"].sum()
 
-        np.random.seed(42)
-        n = 1500
+    col1, col2, col3, col4 = st.columns(4)
 
-        df = pd.DataFrame({
-            "Client_ID": range(1, n+1),
-            "Transactions": np.random.randint(1, 80, n),
-            "Transaction_Value": np.random.randint(1000, 100000, n),
-            "Complaints": np.random.randint(0, 10, n),
-            "SLA_Breach": np.random.uniform(0, 1, n),
-            "Interaction_Gap": np.random.randint(1, 180, n),
-            "RM_Contacts": np.random.randint(0, 15, n),
-            "Wallet_Share": np.random.uniform(0.1, 1, n),
-            "Digital_Usage": np.random.randint(0, 50, n),
-            "Product_Usage": np.random.randint(1, 12, n),
-            "Revenue": np.random.randint(50000, 5000000, n)
-        })
+    col1.metric("Avg Attrition Score", avg_score)
+    col2.metric("High Risk Clients", high_risk)
+    col3.metric("Critical Clients", len(df[df["Risk"]=="Critical"]))
+    col4.metric("Revenue at Risk", f"₹{revenue_risk:,.0f}")
 
-        df["Churn_Flag"] = (
-            (df["Transactions"] < 10) &
-            (df["Interaction_Gap"] > 60) |
-            (df["Wallet_Share"] < 0.3) |
-            (df["Complaints"] > 5)
-        ).astype(int)
+    st.write("### 🧠 Interpretation")
 
-        st.session_state.df = df
-        st.success("✅ System initialized")
+    if avg_score < 40:
+        st.success("Portfolio Stable")
+    elif avg_score < 70:
+        st.warning("Moderate Risk Emerging")
+    else:
+        st.error("High Attrition Risk Detected")
 
-# =========================================================
-# RUN MODEL PIPELINE
-# =========================================================
-if "df" in st.session_state:
+    st.write("### 📉 Risk Distribution")
+    st.bar_chart(df["Risk"].value_counts())
 
-    df = st.session_state.df.copy()
+# ======================================================
+# 🚨 LIVE ALERTS
+# ======================================================
+elif page == "🚨 Live Alerts":
 
-    features = [
-        "Transactions","Transaction_Value","Complaints","SLA_Breach",
-        "Interaction_Gap","RM_Contacts","Wallet_Share",
-        "Digital_Usage","Product_Usage"
-    ]
+    st.subheader("Real-Time Attrition Alerts")
 
-    model = RandomForestClassifier(n_estimators=120)
-    model.fit(df[features], df["Churn_Flag"])
+    alerts = df[df["Risk"].isin(["High","Critical"])].sort_values(by="Score", ascending=False).head(20)
 
-    df["Attrition_Score"] = (model.predict_proba(df[features])[:, 1] * 100).astype(int)
+    st.dataframe(alerts)
 
-# =========================================================
-# FEATURE ENGINEERING (IMPORTANT FOR SRS)
-# =========================================================
-    df["Engagement_Index"] = df["RM_Contacts"] / (df["Interaction_Gap"] + 1)
-    df["Friction_Index"] = df["Complaints"] * df["SLA_Breach"]
-    df["Wallet_Leakage_Index"] = (1 - df["Wallet_Share"]) * 100
+    st.warning("👉 These clients require immediate RM intervention")
 
-# =========================================================
-# RISK SEGMENTATION
-# =========================================================
-    def risk(x):
-        if x < 35: return "Low"
-        elif x < 55: return "Watch"
-        elif x < 70: return "Medium"
-        elif x < 85: return "High"
-        else: return "Critical"
+# ======================================================
+# 📉 DRIVER ANALYSIS
+# ======================================================
+elif page == "📉 Driver Analysis":
 
-    df["Risk"] = df["Attrition_Score"].apply(risk)
+    st.subheader("Root Cause Analysis")
 
-# =========================================================
-# PAGE 1 - OVERVIEW
-# =========================================================
-    if page == "📌 Overview":
+    drivers = {
+        "Transaction Drop": len(df[df["Transaction_Trend"] < -10]),
+        "High Complaints": len(df[df["Complaints_90d"] > 5]),
+        "Low Engagement": len(df[df["Interaction_Days"] > 60]),
+        "Wallet Leakage": len(df[df["Wallet_Share"] < 0.4])
+    }
 
-        st.subheader("System Overview")
+    driver_df = pd.DataFrame(list(drivers.items()), columns=["Driver", "Clients"])
 
-        st.markdown("""
-        This AI engine predicts customer attrition using:
-        - Behavioral signals (transactions)
-        - Engagement signals (RM interaction)
-        - Operational friction (complaints & SLA)
-        - Financial signals (wallet share)
-        - Digital activity
-        
-        Output:
-        - Attrition Score (0–100)
-        - Risk level
-        - Business insights
-        """)
+    st.bar_chart(driver_df.set_index("Driver"))
 
-# =========================================================
-# PAGE 2 - PORTFOLIO DASHBOARD
-# =========================================================
-    elif page == "📊 Portfolio Dashboard":
+# ======================================================
+# 💰 REVENUE
+# ======================================================
+elif page == "💰 Revenue at Risk":
 
-        avg = int(df["Attrition_Score"].mean())
-        risk_clients = len(df[df["Risk"].isin(["High","Critical"])])
-        revenue = df[df["Risk"].isin(["High","Critical"])]["Revenue"].sum()
+    st.subheader("Revenue Exposure")
 
-        c1, c2, c3 = st.columns(3)
+    st.bar_chart(df.groupby("Risk")["Revenue"].sum())
 
-        c1.metric("Avg Score", avg)
-        c2.metric("High Risk Clients", risk_clients)
-        c3.metric("Revenue at Risk", f"₹{revenue:,.0f}")
+    st.write("👉 Indicates financial impact of attrition")
 
-        st.write("👉 Interpretation:")
-        if avg < 40:
-            st.success("Healthy portfolio")
-        elif avg < 70:
-            st.warning("Moderate risk")
-        else:
-            st.error("High attrition risk")
+# ======================================================
+# 📋 PORTFOLIO
+# ======================================================
+elif page == "📋 Client Portfolio":
 
-        st.bar_chart(df["Risk"].value_counts())
+    st.subheader("Active Client Portfolio")
 
-# =========================================================
-# PAGE 3 - DRIVER ANALYTICS
-# =========================================================
-    elif page == "📉 Driver Analytics":
+    st.dataframe(df)
 
-        driver_df = pd.DataFrame({
-            "Driver": ["Friction", "Engagement", "Wallet Leakage"],
-            "Score": [
-                df["Friction_Index"].mean(),
-                df["Engagement_Index"].mean(),
-                df["Wallet_Leakage_Index"].mean()
-            ]
-        })
+# ======================================================
+# 🔍 CLIENT VIEW
+# ======================================================
+elif page == "🔍 Client Deep Dive":
 
-        st.bar_chart(driver_df.set_index("Driver"))
+    selected = st.selectbox("Select Client", df["Client_ID"])
+    client = df[df["Client_ID"] == selected].iloc[0]
 
-        st.write("👉 Shows root causes of attrition")
+    st.write(client)
 
-# =========================================================
-# PAGE 4 - REVENUE IMPACT
-# =========================================================
-    elif page == "💰 Revenue Impact":
+    st.subheader("🧠 Insight Summary")
 
-        rev = df.groupby("Risk")["Revenue"].sum()
-        st.bar_chart(rev)
+    if client["Transaction_Trend"] < -10:
+        st.write("• Declining transactions detected")
+    if client["Complaints_90d"] > 5:
+        st.write("• High complaints → dissatisfaction")
+    if client["Interaction_Days"] > 60:
+        st.write("• Low RM engagement")
+    if client["Wallet_Share"] < 0.4:
+        st.write("• Wallet share erosion")
 
-        st.write("👉 Financial exposure due to attrition")
+    st.subheader("🎯 Recommended Action")
 
-# =========================================================
-# PAGE 5 - RM PRIORITY
-# =========================================================
-    elif page == "🚨 RM Priority Queue":
-
-        top = df.sort_values(by="Attrition_Score", ascending=False).head(20)
-        st.dataframe(top)
-
-        st.write("👉 These clients need immediate attention")
-
-# =========================================================
-# PAGE 6 - CLIENT VIEW
-# =========================================================
-    elif page == "🔍 Client 360 View":
-
-        selected = st.selectbox("Select Client", df["Client_ID"])
-        client = df[df["Client_ID"] == selected].iloc[0]
-
-        st.write(client)
-
-        st.subheader("Insights")
-
-        if client["Transactions"] < 10:
-            st.write("• Declining transactions")
-        if client["Complaints"] > 5:
-            st.write("• High complaints")
-        if client["Interaction_Gap"] > 60:
-            st.write("• Low engagement")
-        if client["Wallet_Share"] < 0.4:
-            st.write("• Wallet leakage")
-
-        st.subheader("Action")
-
-        if client["Attrition_Score"] > 80:
-            st.error("Immediate intervention needed")
-        else:
-            st.info("Monitor client")
-
-else:
-    st.warning("👉 Initialize system from Overview page to start the AI Agent")
+    if client["Score"] > 85:
+        st.error("Immediate escalation required")
+    else:
+        st.warning("RM follow-up required")tem from Overview page to start the AI Agent")

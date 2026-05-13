@@ -197,4 +197,4 @@ elif page == "🔍 Client Deep Dive":
     if client["Score"] > 85:
         st.error("Immediate escalation required")
     else:
-        st.warning("RM follow-up required")tem from Overview page to start the AI Agent")
+        st.warning("RM follow-up required")
